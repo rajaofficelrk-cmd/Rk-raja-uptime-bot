@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RK RAJA • Uptime Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="top"><div class="logo"><i></i>RK RAJA <span>UPTIME</span></div><div id="clock"></div></div>
+
+<main>
+<section class="titlebar">
+  <div>
+    <h1>Monitors<span>.</span></h1>
+    <p>Keep your websites online and monitored.</p>
+  </div>
+  <button class="new" onclick="openModal()">＋ New</button>
+</section>
+
+<section class="cards">
+  <div class="card current">
+    <h2>Current status<span>.</span></h2>
+    <div class="pause">Ⅱ</div>
+    <div class="numbers">
+      <div><b id="down">0</b><small>Down</small></div>
+      <div><b id="up">0</b><small>Up</small></div>
+      <div><b id="paused">0</b><small>Paused</small></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Last 24 hours<span>.</span></h2>
+    <div class="big red" id="uptime">0%</div>
+    <small>Overall uptime</small>
+    <div class="mini"><b id="avg">0 ms</b><span>Average response</span></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panelhead">
+    <h2>Your monitors<span>.</span></h2>
+    <button class="refresh" onclick="load()">↻ Refresh</button>
+  </div>
+  <div id="list"></div>
+</section>
+</main>
+
+<div class="bottom">
+ <span class="active">◉<small>Monitoring</small></span>
+ <span>◌<small>Incidents</small></span>
+ <span>◉<small>Status pages</small></span>
+ <span>☰<small>More</small></span>
+</div>
+
+<div class="modal" id="modal">
+ <div class="dialog">
+  <button class="x" onclick="closeModal()">×</button>
+  <h2>Create monitor<span>.</span></h2>
+  <input id="name" placeholder="Monitor name">
+  <input id="url" placeholder="https://example.com">
+  <button class="create" onclick="createMonitor()">Create monitor</button>
+ </div>
+</div>
+
+<script>
+const $=x=>document.getElementById(x);
+function clock(){ $('clock').textContent=new Date().toLocaleString(); } setInterval(clock,1000); clock();
+
+function openModal(){ $('modal').classList.add('show'); $('name').focus(); }
+function closeModal(){ $('modal').classList.remove('show'); }
+
+async function createMonitor(){
+ const name=$('name').value.trim(), url=$('url').value.trim();
+ if(!name||!url){alert('Name aur URL dono enter karo.');return}
+ const r=await fetch('/api/monitors',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,url})});
+ if(!r.ok){const e=await r.json();alert(e.error||'Error');return}
+ $('name').value='';$('url').value='';closeModal();load();
+}
+
+async function del(id){
+ if(!confirm('Delete this monitor?'))return;
+ await fetch('/api/monitors/'+id,{method:'DELETE'});load();
+}
+async function check(id){
+ await fetch('/api/monitors/'+id+'/check',{method:'POST'});
+ setTimeout(load,1200);
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+
+async function load(){
+ const [mr,sr]=await Promise.all([fetch('/api/monitors'),fetch('/api/summary')]);
+ const data=await mr.json(), s=await sr.json();
+ $('up').textContent=s.up;$('down').textContent=s.down;$('paused').textContent=s.paused;
+ $('uptime').textContent=s.uptime+'%';$('avg').textContent=s.avg+' ms';
+ $('list').innerHTML=data.length?data.map(x=>{
+   const status=x.status==='up'?'<em class="up">● UP</em>':x.status==='down'?'<em class="down">● DOWN</em>':'<em>● UNKNOWN</em>';
+   return `<article class="monitor">
+    <div class="dot ${x.status}"></div><div class="mname"><b>${esc(x.name)}</b><span>${esc(x.url)}</span></div>
+    <div>${status}</div><div><b>${x.uptime}%</b><span>uptime</span></div>
+    <div><b>${x.response_ms?Math.round(x.response_ms):0} ms</b><span>response</span></div>
+    <div><button onclick="check(${x.id})">CHECK</button><button class="delete" onclick="del(${x.id})">×</button></div>
+   </article>`}).join(''):'<div class="empty">No monitors yet. Tap <b>＋ New</b> to add your first website.</div>';
+}
+load(); setInterval(load,15000);
+</script>
+</body>
+</html>
